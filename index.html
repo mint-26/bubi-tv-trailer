@@ -25,28 +25,42 @@ document.head.appendChild(tag);
 
 var player;
 function onYouTubeIframeAPIReady() {
-  var vars = { autoplay: 1, mute: bg ? 1 : 0, controls: bg ? 0 : 1, rel: 0, modestbranding: 1, playsinline: 1,
-    iv_load_policy: 3, hl: "de", disablekb: 1, fs: 0 };
+  var vars = { autoplay: 1, mute: bg ? 1 : 0, controls: 0, rel: 0, modestbranding: 1, playsinline: 1,
+    iv_load_policy: 3, cc_load_policy: 0, disablekb: 1, fs: 0 };
   if (bg) { vars.loop = 1; vars.playlist = v; }
   player = new YT.Player("p", {
     videoId: v, width: "100%", height: "100%", playerVars: vars,
     events: {
       onReady: function (e) {
-        if (bg) e.target.mute();
+        var f = e.target.getIframe(); f.setAttribute("tabindex", "-1");   // der Player soll keine Tasten an sich ziehen
+        if (bg) e.target.mute(); else { e.target.unMute(); e.target.setVolume(100); }
         e.target.playVideo();
-        /* Startet der Ton nicht ohne Klick, stumm weiterlaufen und Bubi TV Bescheid geben */
+        /* Nur wenn das Video nach 5 Sekunden noch gar nicht angelaufen ist (nicht bloß lädt), blockiert der Browser den Ton */
         setTimeout(function () {
-          if (e.target.getPlayerState() !== 1) { e.target.mute(); e.target.playVideo(); send("muted"); }
-        }, 2500);
+          var st = e.target.getPlayerState();
+          if (!bg && (st === -1 || st === 5)) { e.target.mute(); e.target.playVideo(); send("muted"); }
+        }, 5000);
       },
       onStateChange: function (e) {
-        if (e.data === 1) send("playing", { muted: e.target.isMuted() });
+        if (e.data === 1) {
+          send("playing", { muted: e.target.isMuted() });
+          noCaptions(e.target);
+        }
         if (e.data === 0) send("ended");
       },
       onError: function (e) { send("error", e.data); }
     }
   });
 }
+
+/* Untertitel aus, egal was YouTube automatisch einschaltet */
+function noCaptions(p) {
+  try { p.unloadModule("captions"); } catch (e) {}
+  try { p.unloadModule("cc"); } catch (e) {}
+  try { p.setOption("captions", "track", {}); } catch (e) {}
+}
+/* Tasten, die hier ankommen, an Bubi TV weiterreichen (Zurück, OK, Pfeile) */
+document.addEventListener("keydown", function (e) { send("key", e.keyCode); e.preventDefault(); }, true);
 
 window.addEventListener("message", function (ev) {
   var d = ev.data || {};
