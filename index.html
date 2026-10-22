@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Bubi TV Trailer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #p { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+/* Zwischenseite für Bubi TV: hält den YouTube-Player, damit Trailer im TV laufen.
+   ?v=VIDEO_ID  Trailer
+   &bg=1        stumm, ohne Bedienelemente, in Schleife (Hintergrund der Entdecken-Seite) */
+var q = new URLSearchParams(location.search), v = q.get("v") || "", bg = q.get("bg") === "1";
+function send(type, data) { try { parent.postMessage({ bubi: type, data: data }, "*"); } catch (e) {} }
+
+var tag = document.createElement("script");
+tag.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(tag);
+
+var player;
+function onYouTubeIframeAPIReady() {
+  var vars = { autoplay: 1, mute: bg ? 1 : 0, controls: bg ? 0 : 1, rel: 0, modestbranding: 1, playsinline: 1,
+    iv_load_policy: 3, hl: "de", disablekb: 1, fs: 0 };
+  if (bg) { vars.loop = 1; vars.playlist = v; }
+  player = new YT.Player("p", {
+    videoId: v, width: "100%", height: "100%", playerVars: vars,
+    events: {
+      onReady: function (e) {
+        if (bg) e.target.mute();
+        e.target.playVideo();
+        /* Startet der Ton nicht ohne Klick, stumm weiterlaufen und Bubi TV Bescheid geben */
+        setTimeout(function () {
+          if (e.target.getPlayerState() !== 1) { e.target.mute(); e.target.playVideo(); send("muted"); }
+        }, 2500);
+      },
+      onStateChange: function (e) {
+        if (e.data === 1) send("playing", { muted: e.target.isMuted() });
+        if (e.data === 0) send("ended");
+      },
+      onError: function (e) { send("error", e.data); }
+    }
+  });
+}
+
+window.addEventListener("message", function (ev) {
+  var d = ev.data || {};
+  if (!player || !d.cmd) return;
+  if (d.cmd === "unmute") { player.unMute(); player.setVolume(100); send("playing", { muted: false }); }
+  if (d.cmd === "toggle") { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
+  if (d.cmd === "seek") { player.seekTo(Math.max(0, player.getCurrentTime() + (d.by || 0)), true); }
+});
+</script>
+</body>
+</html>
