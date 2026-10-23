@@ -52,7 +52,9 @@ function onYouTubeIframeAPIReady() {
           noCaptions(e.target);
         }
         if (e.data === 0) {
-          if (bg) { e.target.seekTo(0, true); e.target.playVideo(); }   // Hintergrund läuft in Schleife
+          /* Alte Aufrufart ?v=…&bg=1 wiederholt selbst. Sonst entscheidet Bubi TV: Der Player sammelt mit jedem
+             Neustart Speicher an, Bubi TV lädt ihn deshalb nach einigen Videos frisch. */
+          if (bg && v) { e.target.seekTo(0, true); e.target.playVideo(); }
           else send("ended", { v: cur });
         }
       },
