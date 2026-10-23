@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Bubi TV Trailer</title>
+<link rel="preconnect" href="https://www.youtube.com">
+<link rel="preconnect" href="https://i.ytimg.com">
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   #p { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
@@ -15,8 +17,10 @@
 <script>
 /* Zwischenseite für Bubi TV: hält den YouTube-Player, damit Trailer im TV laufen.
    ?v=VIDEO_ID  Trailer
-   &bg=1        stumm, ohne Bedienelemente, in Schleife (Hintergrund der Entdecken-Seite) */
-var q = new URLSearchParams(location.search), v = q.get("v") || "", bg = q.get("bg") === "1";
+   &bg=1        stumm, ohne Bedienelemente, in Schleife (Hintergrund der Entdecken-Seite)
+   ?bg=1 ohne v Player wartet leer und meldet "ready"; Bubi TV schickt dann {cmd: "load", v} für jeden Titel,
+                so lädt die Seite nur einmal und der Wechsel zum nächsten Trailer geht schnell */
+var q = new URLSearchParams(location.search), v = q.get("v") || "", bg = q.get("bg") === "1", cur = v;
 function send(type, data) { try { parent.postMessage({ bubi: type, data: data }, "*"); } catch (e) {} }
 
 var tag = document.createElement("script");
@@ -27,12 +31,13 @@ var player;
 function onYouTubeIframeAPIReady() {
   var vars = { autoplay: 1, mute: bg ? 1 : 0, controls: 0, rel: 0, modestbranding: 1, playsinline: 1,
     iv_load_policy: 3, cc_load_policy: 0, disablekb: 1, fs: 0 };
-  if (bg) { vars.loop = 1; vars.playlist = v; }
-  player = new YT.Player("p", {
-    videoId: v, width: "100%", height: "100%", playerVars: vars,
+  if (bg && v) { vars.loop = 1; vars.playlist = v; }
+  var opts = {
+    width: "100%", height: "100%", playerVars: vars,
     events: {
       onReady: function (e) {
         var f = e.target.getIframe(); f.setAttribute("tabindex", "-1");   // der Player soll keine Tasten an sich ziehen
+        if (!v) { send("ready"); return; }
         if (bg) e.target.mute(); else { e.target.unMute(); e.target.setVolume(100); }
         e.target.playVideo();
         /* Nur wenn das Video nach 5 Sekunden noch gar nicht angelaufen ist (nicht bloß lädt), blockiert der Browser den Ton */
@@ -43,14 +48,19 @@ function onYouTubeIframeAPIReady() {
       },
       onStateChange: function (e) {
         if (e.data === 1) {
-          send("playing", { muted: e.target.isMuted() });
+          send("playing", { muted: e.target.isMuted(), v: cur });
           noCaptions(e.target);
         }
-        if (e.data === 0) send("ended");
+        if (e.data === 0) {
+          if (bg) { e.target.seekTo(0, true); e.target.playVideo(); }   // Hintergrund läuft in Schleife
+          else send("ended", { v: cur });
+        }
       },
-      onError: function (e) { send("error", e.data); }
+      onError: function (e) { send("error", { code: e.data, v: cur }); }
     }
-  });
+  };
+  if (v) opts.videoId = v;
+  player = new YT.Player("p", opts);
 }
 
 /* Untertitel aus, egal was YouTube automatisch einschaltet */
@@ -65,7 +75,9 @@ document.addEventListener("keydown", function (e) { send("key", e.keyCode); e.pr
 window.addEventListener("message", function (ev) {
   var d = ev.data || {};
   if (!player || !d.cmd) return;
-  if (d.cmd === "unmute") { player.unMute(); player.setVolume(100); send("playing", { muted: false }); }
+  if (d.cmd === "load" && d.v) { cur = d.v; player.mute(); player.loadVideoById(d.v); }
+  if (d.cmd === "stop") { cur = ""; player.stopVideo(); }
+  if (d.cmd === "unmute") { player.unMute(); player.setVolume(100); send("playing", { muted: false, v: cur }); }
   if (d.cmd === "toggle") { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
   if (d.cmd === "seek") { player.seekTo(Math.max(0, player.getCurrentTime() + (d.by || 0)), true); }
 });
