@@ -1,0 +1,26 @@
+name: Netflix Top 10
+# Holt jeden Morgen die offiziellen Netflix-Top-10 für Deutschland und legt netflix-de.json ins Repository.
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  top10:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Liste holen
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: node top10/netflix-top10.mjs "" netflix-de.json
+      - name: Speichern
+        run: |
+          git config user.name "Bubi TV"
+          git config user.email "bubi-tv@users.noreply.github.com"
+          git add netflix-de.json
+          git diff --cached --quiet || (git commit -m "Netflix Top 10 aktualisiert" && git push)
