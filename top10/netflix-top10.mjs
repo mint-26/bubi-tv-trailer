@@ -64,15 +64,15 @@ const out = { source: "Netflix Top 10, Deutschland", week, updated: new Date().t
 for (const [cat, key] of [["Films", "movie"], ["TV", "tv"]]) {
   const list = cur.filter(c => c[3] === cat).sort((a, b) => a[4] - b[4]);
   for (const c of list) {
-    const rank = +c[4], title = c[5], weeks = +c[7];
+    const rank = +c[4], title = c[5], weeks = +c[7], season = c[6] && c[6] !== "N/A" ? c[6] : "";
     let m = null;
     try { m = await match(title, key, weeks); } catch (e) { console.error(e.message); }
     let x = m && m.x;
     if (x) { try { const de = await tmdb(`/${m.type}/${x.id}`); x = Object.assign({}, x, { title: de.title, name: de.name, overview: de.overview || x.overview, poster_path: de.poster_path || x.poster_path, backdrop_path: de.backdrop_path || x.backdrop_path, genre_ids: (de.genres || []).map(g => g.id) }); } catch (e) {} }
     out[key].push(x ? {
-      id: x.id, type: m.type, title: x.title || x.name || title, date: x.release_date || x.first_air_date || "", rank, weeks,
+      id: x.id, type: m.type, title: x.title || x.name || title, date: x.release_date || x.first_air_date || "", rank, weeks, season,
       vote: x.vote_average, genres: x.genre_ids || [], overview: x.overview || "", backdrop: x.backdrop_path || "", poster: x.poster_path || "", prov: 8
-    } : { id: 0, type: key, title, date: "", rank, weeks, vote: 0, genres: [], overview: "", backdrop: "", poster: "", prov: 8 });
+    } : { id: 0, type: key, title, date: "", rank, weeks, season, vote: 0, genres: [], overview: "", backdrop: "", poster: "", prov: 8 });
     console.log(key, rank, title, "→", x ? (x.title || x.name) + " (" + m.type + " " + x.id + ")" : "kein Treffer");
   }
 }
