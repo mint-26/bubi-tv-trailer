@@ -27,7 +27,15 @@ var tag = document.createElement("script");
 tag.src = "https://www.youtube.com/iframe_api";
 document.head.appendChild(tag);
 
-var player;
+var player, stummVorlaeufig = false;
+/* Ton nach der vorläufigen Stummschaltung wieder an; hält der Browser das Video dabei an oder bleibt es stumm, wirklich stumm weiter */
+function tonZurueck(p) {
+  p.unMute(); p.setVolume(100);
+  setTimeout(function () {
+    if (p.getPlayerState() === 1 && !p.isMuted()) { send("playing", { muted: false, v: cur }); noCaptions(p); return; }
+    p.mute(); p.playVideo(); send("muted");
+  }, 1200);
+}
 function onYouTubeIframeAPIReady() {
   var vars = { autoplay: 1, mute: bg ? 1 : 0, controls: 0, rel: 0, modestbranding: 1, playsinline: 1,
     iv_load_policy: 3, cc_load_policy: 0, disablekb: 1, fs: 0 };
@@ -40,13 +48,16 @@ function onYouTubeIframeAPIReady() {
         if (!v) { send("ready"); return; }
         if (bg) e.target.mute(); else { e.target.unMute(); e.target.setVolume(100); }
         e.target.playVideo();
-        /* Nur wenn das Video nach 5 Sekunden noch gar nicht angelaufen ist (nicht bloß lädt), blockiert der Browser den Ton */
+        /* Nur wenn das Video nach 5 Sekunden noch gar nicht angelaufen ist (nicht bloß lädt), blockiert der Browser den Ton.
+           Aber: während einer Werbung meldet YouTube das Video ebenfalls als „nicht gestartet“ (13.11., C2). Darum nur
+           vorläufig stumm; sobald das Video selbst läuft, Ton wieder an (tonZurueck), und nur wenn er dann nicht bleibt: Hinweis */
         setTimeout(function () {
           var st = e.target.getPlayerState();
-          if (!bg && (st === -1 || st === 5)) { e.target.mute(); e.target.playVideo(); send("muted"); }
+          if (!bg && (st === -1 || st === 5)) { e.target.mute(); e.target.playVideo(); stummVorlaeufig = true; }
         }, 5000);
       },
       onStateChange: function (e) {
+        if (e.data === 1 && stummVorlaeufig && !bg) { stummVorlaeufig = false; tonZurueck(e.target); return; }
         if (e.data === 1) {
           send("playing", { muted: e.target.isMuted(), v: cur });
           noCaptions(e.target);
