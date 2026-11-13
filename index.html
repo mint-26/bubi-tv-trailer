@@ -48,16 +48,12 @@ function onYouTubeIframeAPIReady() {
         if (!v) { send("ready"); return; }
         if (bg) e.target.mute(); else { e.target.unMute(); e.target.setVolume(100); }
         e.target.playVideo();
-        /* Nur wenn das Video nach 5 Sekunden noch gar nicht angelaufen ist (nicht bloß lädt), blockiert der Browser den Ton.
-           Aber: während einer Werbung meldet YouTube das Video ebenfalls als „nicht gestartet“ (13.11., C2). Darum nur
-           vorläufig stumm; sobald das Video selbst läuft, Ton wieder an (tonZurueck), und nur wenn er dann nicht bleibt: Hinweis */
-        setTimeout(function () {
-          var st = e.target.getPlayerState();
-          if (!bg && (st === -1 || st === 5)) { e.target.mute(); e.target.playVideo(); stummVorlaeufig = true; }
-        }, 5000);
+        /* Kein Stummschalten nach Zeit mehr: während einer Werbung meldet YouTube das Video als „nicht gestartet“, und die
+           frühere 5-Sekunden-Regel schaltete die Werbung stumm (13.11., C2). Läuft das Video stumm an, weil der Browser Ton
+           verweigert, merkt das onStateChange (Zustand 1, isMuted) und versucht den Ton; nur wenn das nicht geht: Hinweis */
       },
       onStateChange: function (e) {
-        if (e.data === 1 && stummVorlaeufig && !bg) { stummVorlaeufig = false; tonZurueck(e.target); return; }
+        if (e.data === 1 && !bg && e.target.isMuted() && !stummVorlaeufig) { stummVorlaeufig = true; tonZurueck(e.target); return; }   // einmal je Video
         if (e.data === 1) {
           send("playing", { muted: e.target.isMuted(), v: cur });
           noCaptions(e.target);
@@ -88,7 +84,7 @@ document.addEventListener("keydown", function (e) { send("key", e.keyCode); e.pr
 window.addEventListener("message", function (ev) {
   var d = ev.data || {};
   if (!player || !d.cmd) return;
-  if (d.cmd === "load" && d.v) { cur = d.v; player.mute(); player.loadVideoById(d.v); }
+  if (d.cmd === "load" && d.v) { cur = d.v; player.mute(); player.loadVideoById(d.v); }   // Hintergrund-Trailer: immer stumm
   if (d.cmd === "stop") { cur = ""; player.stopVideo(); }
   if (d.cmd === "unmute") { player.unMute(); player.setVolume(100); send("playing", { muted: false, v: cur }); }
   if (d.cmd === "toggle") { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
